@@ -130,7 +130,7 @@ Save the content type and continue.
 
 ### Step 4. Validate your content model
 
-After setting up the content model (either manually or by running `npm run setup` or `yarn setup`), it should look as follows.
+In your Contentful space, go to **Content model** to see the result. It should look as follows.
 
 **Content model overview**
 
