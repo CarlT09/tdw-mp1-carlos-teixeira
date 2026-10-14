@@ -2,10 +2,6 @@
 
 This example showcases Next.js's [Static Generation](https://nextjs.org/docs/basic-features/pages) feature using [Contentful](https://www.contentful.com/) as the data source.
 
-## Demo
-
-### [https://github.com/deca-ua/mp1-template-david/]
-
 ## How to use
 
 Execute
