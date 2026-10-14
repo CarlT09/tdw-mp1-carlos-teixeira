@@ -18,7 +18,31 @@ First, [create an account on Contentful](https://www.contentful.com/sign-up/).
 
 After creating an account, create a new empty **space** from the [dashboard](https://app.contentful.com/) and assign to it any name of your liking.
 
-### Step 2. Create a content model
+### Step 2. Set up environment variables
+
+All scripts and the app read their configuration from a `.env.local` file in the project root, which is ignored by Git. Copy the example file:
+
+```bash
+cp .env.local.example .env.local
+```
+
+Then fill in each variable:
+
+- `CONTENTFUL_SPACE_ID`: in your Contentful dashboard go to **Settings > General Settings** and copy the **Space ID**.
+- `CONTENTFUL_ACCESS_TOKEN`: go to **Settings > API keys**. Use the **[Content Delivery API](https://www.contentful.com/developers/docs/references/content-delivery-api/) - access token** of the example key, or create a new key.
+- `CONTENTFUL_PREVIEW_ACCESS_TOKEN`: from the same API key, use the **[Content Preview API](https://www.contentful.com/developers/docs/references/content-preview-api/) - access token**.
+- `CONTENTFUL_MANAGEMENT_TOKEN`: go to **Settings > CMA tokens** and click **Create personal access token**, then in the table row click **Authorize Access** and **Authorize**. It starts with `CFPAT-` and has the same access rights as your user. **Do not share it publicly.** It is only used by the setup script in the next step, and you can delete it afterwards.
+
+Your `.env.local` file should look like this:
+
+```bash
+CONTENTFUL_SPACE_ID=...
+CONTENTFUL_ACCESS_TOKEN=...
+CONTENTFUL_PREVIEW_ACCESS_TOKEN=...
+CONTENTFUL_MANAGEMENT_TOKEN=CFPAT-...
+```
+
+### Step 3. Create a content model
 
 The [content model](https://www.contentful.com/developers/docs/concepts/data-model/) defines the data structures of your application/websites. The structures are flexible and you can tailor them to your needs.
 
@@ -26,23 +50,24 @@ For this example you need to create a content model that defines an author and a
 
 #### Run a script to create the content model
 
-This project includes a setup script which you can use to set up the content model expected by the source code.
+This project includes a setup script which you can use to set up the content model expected by the source code. It reads `CONTENTFUL_SPACE_ID` and `CONTENTFUL_MANAGEMENT_TOKEN` from the `.env.local` file you created in Step 2.
 
-In your Contentful dashboard go to **Settings > General Settings** and copy the **Space ID**.
-
-Next, go to **Settings > CMA tokens** and create a new token by clicking **Create personal access token**, then click on the table's row "**Authorize Access**" and click **Authorize**.. This token has the same access rights as the logged in user. **Do not share it publicly**, you will only use it to set up your space and can delete it afterwards.
-
-With the space ID and management access token at hand run the following command:
-
+```bash
+npm install
+npm run setup
 ```
-npx cross-env CONTENTFUL_SPACE_ID=YOUR_SPACE_ID CONTENTFUL_MANAGEMENT_TOKEN=XXX npm run setup
+
+If you prefer not to store the management token in a file, you can pass both values inline instead:
+
+```bash
+CONTENTFUL_SPACE_ID=YOUR_SPACE_ID CONTENTFUL_MANAGEMENT_TOKEN=CFPAT-XXX npm run setup
 ```
 
 This command will create the needed content structures and set up your Contentful space ready to use. The output should look as follows:
 
 ```
-> cms-contentful@1.0.0 setup /Users/stefan.judis/Projects/next.js/examples/cms-contentful
-> node ./contentful/setup.js $CONTENTFUL_SPACE_ID $CONTENTFUL_MANAGEMENT_TOKEN
+> setup
+> node --env-file-if-exists=.env.local ./lib/setup.js
 
 ┌──────────────────────────────────────────────────┐
 │ The following entities are going to be imported: │
@@ -103,7 +128,7 @@ Next, add these fields (you don't have to modify the settings unless specified):
 
 Save the content type and continue.
 
-### Step 3. Validate your content model
+### Step 4. Validate your content model
 
 After setting up the content model (either manually or by running `npm run setup` or `yarn setup`), it should look as follows.
 
@@ -111,7 +136,7 @@ After setting up the content model (either manually or by running `npm run setup
 
 ![Content model overview](https://github.com/vercel/next.js/assets/9113740/d3f76907-7046-4d94-b285-eb89b87aa223)
 
-### Step 4. Populate Content
+### Step 5. Populate Content
 
 Go to the **Content** section in your space, then click on **Add entry** and select the **Author** content type:
 
@@ -130,44 +155,16 @@ Next, create another entry with the content type **Post**:
 
 ![Published content entry](https://github.com/vercel/next.js/assets/9113740/e1b4a3fe-45f4-4851-91db-8908d3ca18e9)
 
-### Step 5. Set up environment variables
-
-From your contentful space, go to **Settings > API keys**. There will be an example Content delivery / preview token - you can use these API keys. (You may also create a new key.)
-
-Next, copy the `.env.local.example` file in this directory to `.env.local` (which will be ignored by Git):
-
-```bash
-cp .env.local.example .env.local
-```
-
-Then set each variable on `.env.local`:
-
-- `CONTENTFUL_SPACE_ID` should be the **Space ID** field of your API Key
-- `CONTENTFUL_ACCESS_TOKEN` should be the **[Content Delivery API](https://www.contentful.com/developers/docs/references/content-delivery-api/) - access token** field of your API key
-- `CONTENTFUL_PREVIEW_ACCESS_TOKEN` should be the **[Content Preview API](https://www.contentful.com/developers/docs/references/content-preview-api/) - access token** field of your API key
-- `CONTENTFUL_PREVIEW_SECRET` should be any value you want. It must be URL friendly as the dashboard will send it as a query parameter to enable Next.js Draft Mode
-- - `CONTENTFUL_REVALIDATE_SECRET` should be any value you want. This will be the value you pass in as a secret header from the Contentful Webhook settings to use **[On-Demand Revalidation](https://vercel.com/docs/concepts/next.js/incremental-static-regeneration#on-demand-revalidation)**
-
-Your `.env.local` file should look like this:
-
-```bash
-CONTENTFUL_SPACE_ID=...
-CONTENTFUL_ACCESS_TOKEN=...
-CONTENTFUL_PREVIEW_ACCESS_TOKEN=...
-CONTENTFUL_PREVIEW_SECRET=...
-CONTENTFUL_REVALIDATE_SECRET=...
-```
-
 ### Step 6. Run Next.js in development mode
+
+Next.js reads `.env.local` automatically.
 
 ```bash
 npm install
 npm run dev
-
-
+```
 
 Your blog should be up and running on [http://localhost:3000](http://localhost:3000)! If it doesn't work, post on [GitHub discussions](https://github.com/vercel/next.js/discussions).
-```
 
 ## Acknowledgements
 
