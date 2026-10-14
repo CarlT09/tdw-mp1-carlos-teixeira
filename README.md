@@ -138,11 +138,14 @@ In your Contentful space, go to **Content model** to see the result. It should l
 
 ### Step 5. Populate Content
 
+The app only shows content that is **published**. Entries and images you save but do not publish stay in draft and will not appear on the site.
+
 Go to the **Content** section in your space, then click on **Add entry** and select the **Author** content type:
 
 - You just need **1 author entry**.
 - Use dummy data for the text.
 - For the image, you can download one from [Unsplash](https://unsplash.com/).
+- **Publish the picture asset**, then **Publish the author entry**.
 
 Next, create another entry with the content type **Post**:
 
@@ -150,8 +153,10 @@ Next, create another entry with the content type **Post**:
 - Use dummy data for the text.
 - For images, you can download them from [Unsplash](https://unsplash.com/).
 - Pick the **author** you created earlier.
+- Fill in every field, including **date**, **slug** and **cover image**. They are all required.
+- **Publish the cover image asset**, then **Publish the post entry**.
 
-**Important:** For each entry and asset, you need to click on **Publish**. If not, the entry will be in draft state.
+**Important:** publishing an entry does not publish the images it links to. Each asset must be published on its own, otherwise the post will show up without an image or not at all. You can check the status of everything in the **Content** and **Media** sections: it should say **Published**, not **Draft** or **Changed**.
 
 ![Published content entry](https://github.com/vercel/next.js/assets/9113740/e1b4a3fe-45f4-4851-91db-8908d3ca18e9)
 
