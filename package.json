@@ -7,7 +7,8 @@
     "setup": "node --env-file-if-exists=.env.local ./lib/setup.js",
     "lint": "next lint",
     "format": "prettier --check .",
-    "format:fix": "prettier --write ."
+    "format:fix": "prettier --write .",
+    "test": "vitest run"
   },
   "dependencies": {
     "@contentful/rich-text-react-renderer": "^15.17.1",
@@ -31,6 +32,8 @@
     "eslint": "^8.57.1",
     "eslint-config-next": "^15.0.0",
     "eslint-config-prettier": "^10.1.8",
-    "prettier": "^3.9.10"
+    "prettier": "^3.9.10",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5"
   }
 }
