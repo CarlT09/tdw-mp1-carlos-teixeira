@@ -34,7 +34,7 @@ async function fetchGraphQL(query: string, preview = false): Promise<any> {
       },
       body: JSON.stringify({ query }),
       next: { tags: ["posts"] },
-    },
+    }
   ).then((response) => response.json());
 }
 
@@ -59,7 +59,7 @@ export async function getPreviewPostBySlug(slug: string | null): Promise<any> {
         }
       }
     }`,
-    true,
+    true
   );
   return extractPost(entry);
 }
@@ -75,14 +75,14 @@ export async function getAllPosts(isDraftMode: boolean): Promise<any[]> {
         }
       }
     }`,
-    isDraftMode,
+    isDraftMode
   );
   return extractPostEntries(entries);
 }
 
 export async function getPostAndMorePosts(
   slug: string,
-  preview: boolean,
+  preview: boolean
 ): Promise<any> {
   const entry = await fetchGraphQL(
     `query {
@@ -94,7 +94,7 @@ export async function getPostAndMorePosts(
         }
       }
     }`,
-    preview,
+    preview
   );
   const entries = await fetchGraphQL(
     `query {
@@ -106,7 +106,7 @@ export async function getPostAndMorePosts(
         }
       }
     }`,
-    preview,
+    preview
   );
   return {
     post: extractPost(entry),
