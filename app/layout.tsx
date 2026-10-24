@@ -36,6 +36,9 @@ function Footer() {
             </a>
           </div>
         </div>
+        <div className="pb-8 text-center text-xs text-gray-500">
+          built from {process.env.NEXT_PUBLIC_SHA?.slice(0, 7) ?? "local"}
+        </div>
       </div>
     </footer>
   );

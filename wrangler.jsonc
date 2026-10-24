@@ -1,0 +1,8 @@
+{
+  "name": "tdw-mp1-carlos-teixeira",
+  "compatibility_date": "2026-10-24",
+  "assets": {
+    "directory": "./out",
+    "not_found_handling": "404-page",
+  },
+}
