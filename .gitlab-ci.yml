@@ -1,0 +1,86 @@
+stages:
+  - validate
+  - build
+  - deploy
+
+default:
+  image: node:22
+  cache:
+    key:
+      files:
+        - package-lock.json
+    paths:
+      - .npm/
+
+before_script:
+  - npm ci --cache .npm --prefer-offline
+
+# ---------------------------------------------------------------------------
+# STAGE: validate (Executado em paralelo)
+# ---------------------------------------------------------------------------
+lint:
+  stage: validate
+  script:
+    - npm run lint
+
+format:
+  stage: validate
+  script:
+    - npm run format
+
+test:
+  stage: validate
+  script:
+    - npm run test:coverage
+  coverage: '/All files[^|]*\|[^|]*\s+([\d\.]+)/'
+
+ai-review:
+  stage: validate
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git
+    - npm ci --cache .npm --prefer-offline
+  script:
+    - git fetch origin $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+    - git diff origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME...HEAD > pr_diff.txt || true
+    - node scripts/ai-review.mjs
+    - cat review.md
+  artifacts:
+    paths:
+      - review.md
+    expire_in: 7 days
+
+# ---------------------------------------------------------------------------
+# STAGE: build (Build Once - Gera artefacto estático)
+# ---------------------------------------------------------------------------
+build:
+  stage: build
+  needs:
+    - lint
+    - format
+    - test
+  variables:
+    NEXT_PUBLIC_SHA: $CI_COMMIT_SHA
+  script:
+    - npm run build
+  artifacts:
+    name: "site-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - out/
+    expire_in: 1 day
+
+# ---------------------------------------------------------------------------
+# STAGE: deploy (Deploy no Cloudflare Workers na branch main)
+# ---------------------------------------------------------------------------
+deploy:
+  stage: deploy
+  needs:
+    - build
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  environment:
+    name: production
+    url: https://tdw-mp1.carlosteixeira05.workers.dev
+  script:
+    - npx wrangler deploy
