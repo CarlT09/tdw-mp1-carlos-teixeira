@@ -16,7 +16,7 @@ async function runReview() {
     console.log("No git diff found.");
     fs.writeFileSync(
       "review.md",
-      "### 🤖 Gemini AI Code Review\n\nNenhuma alteração de código detectada neste Pull Request."
+      "## 🤖 Google Gemini AI Code Review\n\nNenhuma alteração de código detectada neste Pull Request."
     );
     return;
   }
@@ -33,8 +33,7 @@ Analisa este Pull Request (git diff) e faz uma revisão de código construtiva, 
 ${diff}
 \`\`\`
 
-Estrutura o teu parecer com:
-### 🤖 Gemini AI Code Review
+Estrutura o teu parecer com as seguintes secções:
 - **📋 Resumo das Alterações:** Breve resumo do que foi alterado.
 - **🛡️ Segurança & Segredos:** Confirma se não há tokens expostos ou falhas de segurança.
 - **⚡ Qualidade & Boas Práticas:** Avalia estilo, padrões TypeScript e boas práticas de Next.js.
@@ -101,7 +100,7 @@ Estrutura o teu parecer com:
             ],
             generationConfig: {
               temperature: 0.2,
-              maxOutputTokens: 1000,
+              maxOutputTokens: 2500,
             },
           }),
         }
@@ -116,9 +115,13 @@ Estrutura o teu parecer com:
       }
 
       const data = await response.json();
-      reviewText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (reviewText) {
+      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (rawText) {
         console.log(`Success! Generated review using ${model}!`);
+        const cleanText = rawText
+          .replace(/^#+\s*(?:🤖\s*)?Gemini AI Code Review\s*/i, "")
+          .trim();
+        reviewText = `## 🤖 Google Gemini AI Code Review (${model})\n> *Esta revisão de código foi gerada automaticamente pelo Google Gemini via pipeline de CI/CD.*\n\n${cleanText}`;
         break;
       }
     } catch (err) {
@@ -131,7 +134,7 @@ Estrutura o teu parecer com:
   } else {
     fs.writeFileSync(
       "review.md",
-      "### 🤖 Gemini AI Code Review\n\nNão foi possível obter resposta da API do Gemini nesta execução."
+      "## 🤖 Google Gemini AI Code Review\n\n> *Aviso: Não foi possível obter resposta da API do Gemini nesta execução.*"
     );
   }
 }
