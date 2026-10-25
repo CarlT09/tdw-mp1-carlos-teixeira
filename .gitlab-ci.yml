@@ -59,8 +59,12 @@ ai-review:
       if [ -n "$CI_MERGE_REQUEST_IID" ] && [ -f review.md ]; then
         echo "Posting AI review comment to Merge Request !$CI_MERGE_REQUEST_IID..."
         JSON_BODY=$(jq -Rs '{body: .}' review.md)
+        AUTH_HEADER="JOB-TOKEN: $CI_JOB_TOKEN"
+        if [ -n "$GITLAB_TOKEN" ]; then
+          AUTH_HEADER="PRIVATE-TOKEN: $GITLAB_TOKEN"
+        fi
         curl -s -X POST \
-          -H "JOB-TOKEN: $CI_JOB_TOKEN" \
+          -H "$AUTH_HEADER" \
           -H "Content-Type: application/json" \
           -d "$JSON_BODY" \
           "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID/notes" || true
@@ -91,7 +95,7 @@ build:
     expire_in: 1 day
 
 # ---------------------------------------------------------------------------
-# STAGE: deploy (Preview em MRs e Deploy Produção na branch main)
+# STAGE: deploy (Preview, Lighthouse e Deploy Produção na branch main)
 # ---------------------------------------------------------------------------
 preview:
   stage: deploy
@@ -110,11 +114,44 @@ preview:
     - PREVIEW_URL="https://${PREVIEW_ALIAS}-tdw-mp1.carlosteixeira05.workers.dev"
     - echo "Preview URL available at $PREVIEW_URL"
     - |
+      AUTH_HEADER="JOB-TOKEN: $CI_JOB_TOKEN"
+      if [ -n "$GITLAB_TOKEN" ]; then
+        AUTH_HEADER="PRIVATE-TOKEN: $GITLAB_TOKEN"
+      fi
       curl -s -X POST \
-        -H "JOB-TOKEN: $CI_JOB_TOKEN" \
+        -H "$AUTH_HEADER" \
         -H "Content-Type: application/json" \
         -d "{\"body\": \"Preview: $PREVIEW_URL\"}" \
         "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID/notes" || true
+
+lighthouse:
+  stage: deploy
+  needs:
+    - preview
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+  image: cypress/browsers:latest
+  before_script: []
+  script:
+    - PREVIEW_URL="https://mr-${CI_MERGE_REQUEST_IID}-tdw-mp1.carlosteixeira05.workers.dev"
+    - echo "Waiting for preview URL to be reachable: $PREVIEW_URL"
+    - |
+      for i in $(seq 1 12); do
+        STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PREVIEW_URL" || true)
+        if [ "$STATUS" = "200" ]; then
+          echo "Preview URL returned HTTP 200!"
+          break
+        fi
+        echo "Attempt $i: status $STATUS, waiting 5 seconds..."
+        sleep 5
+      done
+    - echo "Running Lighthouse CI audit against $PREVIEW_URL..."
+    - npx @lhci/cli autorun --collect.url="$PREVIEW_URL" --collect.settings.chromeFlags="--no-sandbox --headless --disable-gpu" --upload.target="temporary-public-storage" || true
+  artifacts:
+    when: always
+    paths:
+      - .lighthouseci/
+    expire_in: 7 days
 
 deploy:
   stage: deploy
