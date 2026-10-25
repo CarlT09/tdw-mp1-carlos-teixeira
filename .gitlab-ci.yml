@@ -1,0 +1,130 @@
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
+stages:
+  - validate
+  - build
+  - deploy
+
+default:
+  image: node:22
+  cache:
+    key:
+      files:
+        - package-lock.json
+    paths:
+      - .npm/
+
+before_script:
+  - node -v
+  - npm -v
+  - npm ci --cache .npm --prefer-offline
+
+# ---------------------------------------------------------------------------
+# STAGE: validate (Executado em paralelo)
+# ---------------------------------------------------------------------------
+lint:
+  stage: validate
+  script:
+    - npm run lint
+
+format:
+  stage: validate
+  script:
+    - npm run format
+
+test:
+  stage: validate
+  script:
+    - npm run test:coverage
+  coverage: '/All files[^|]*\|[^|]*\s+([\d\.]+)/'
+
+ai-review:
+  stage: validate
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git jq
+    - npm ci --cache .npm --prefer-offline
+  script:
+    - git fetch origin main || true
+    - git diff origin/main...HEAD > pr_diff.txt || true
+    - node scripts/ai-review.mjs
+    - cat review.md
+    - |
+      if [ -n "$CI_MERGE_REQUEST_IID" ] && [ -f review.md ]; then
+        echo "Posting AI review comment to Merge Request !$CI_MERGE_REQUEST_IID..."
+        JSON_BODY=$(jq -Rs '{body: .}' review.md)
+        curl -s -X POST \
+          -H "JOB-TOKEN: $CI_JOB_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d "$JSON_BODY" \
+          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID/notes" || true
+      fi
+  artifacts:
+    paths:
+      - review.md
+    expire_in: 7 days
+
+# ---------------------------------------------------------------------------
+# STAGE: build (Build Once - Gera artefacto estático)
+# ---------------------------------------------------------------------------
+build:
+  stage: build
+  needs:
+    - lint
+    - format
+    - test
+  variables:
+    NEXT_PUBLIC_SHA: $CI_COMMIT_SHA
+  script:
+    - echo "Starting Next.js static build..."
+    - npm run build
+  artifacts:
+    name: "site-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - out/
+    expire_in: 1 day
+
+# ---------------------------------------------------------------------------
+# STAGE: deploy (Preview em MRs e Deploy Produção na branch main)
+# ---------------------------------------------------------------------------
+preview:
+  stage: deploy
+  needs:
+    - job: build
+      artifacts: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+  environment:
+    name: preview/$CI_MERGE_REQUEST_IID
+    url: https://mr-${CI_MERGE_REQUEST_IID}-tdw-mp1.carlosteixeira05.workers.dev
+  script:
+    - echo "Uploading preview version to Cloudflare Workers..."
+    - PREVIEW_ALIAS="mr-${CI_MERGE_REQUEST_IID}"
+    - npx wrangler versions upload --preview-alias "$PREVIEW_ALIAS" --message "MR !${CI_MERGE_REQUEST_IID} ($CI_COMMIT_SHORT_SHA)"
+    - PREVIEW_URL="https://${PREVIEW_ALIAS}-tdw-mp1.carlosteixeira05.workers.dev"
+    - echo "Preview URL available at $PREVIEW_URL"
+    - |
+      curl -s -X POST \
+        -H "JOB-TOKEN: $CI_JOB_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "{\"body\": \"Preview: $PREVIEW_URL\"}" \
+        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID/notes" || true
+
+deploy:
+  stage: deploy
+  needs:
+    - job: build
+      artifacts: true
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  environment:
+    name: production
+    url: https://tdw-mp1.carlosteixeira05.workers.dev
+  script:
+    - npx wrangler deploy
