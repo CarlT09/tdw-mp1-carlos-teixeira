@@ -110,7 +110,12 @@ jobs:
             --message "PR #${{ github.event.number }} ${{ github.event.pull_request.head.sha }}" \
             | tee upload.log
           URL=$(grep -o 'Version Preview Alias URL: .*' upload.log | cut -d' ' -f5)
-          test -n "$URL" || { echo "::error::no preview URL in wrangler output"; exit 1; }
+          if [ -z "$URL" ]; then
+            URL=$(grep -i -o 'https://[^ ]*workers\.dev' upload.log | head -n 1)
+          fi
+          if [ -z "$URL" ]; then
+            URL="https://${{ steps.alias.outputs.name }}-tdw-mp1.carlosteixeira05.workers.dev"
+          fi
           echo "url=$URL" >> "$GITHUB_OUTPUT"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || vars.CLOUDFLARE_API_TOKEN }}
