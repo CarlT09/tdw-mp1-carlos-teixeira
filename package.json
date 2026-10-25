@@ -8,7 +8,8 @@
     "lint": "next lint",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@contentful/rich-text-react-renderer": "^15.17.1",
@@ -29,6 +30,7 @@
     "typescript": "^5.1.6"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^5.0.5",
     "eslint": "^8.57.1",
     "eslint-config-next": "^15.0.0",
     "eslint-config-prettier": "^10.1.8",

@@ -1,5 +1,9 @@
 # A statically generated blog example using Next.js and Contentful
 
+[![CI/CD Pipeline](https://github.com/CarlT09/tdw-mp1-carlos-teixeira/actions/workflows/ci.yml/badge.svg)](https://github.com/CarlT09/tdw-mp1-carlos-teixeira/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/Coverage-100%25-brightgreen.svg)](https://github.com/CarlT09/tdw-mp1-carlos-teixeira)
+[![Cloudflare](https://img.shields.io/badge/Deploy-Cloudflare%20Workers-orange.svg)](https://tdw-mp1.carlosteixeira05.workers.dev)
+
 This example showcases Next.js's [Static Generation](https://nextjs.org/docs/basic-features/pages) feature using [Contentful](https://www.contentful.com/) as the data source.
 
 ## How to use
