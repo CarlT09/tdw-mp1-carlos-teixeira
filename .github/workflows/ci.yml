@@ -109,9 +109,9 @@ jobs:
             --preview-alias "${{ steps.alias.outputs.name }}" \
             --message "PR #${{ github.event.number }} ${{ github.event.pull_request.head.sha }}" \
             | tee upload.log
-          URL=$(grep -o 'Version Preview Alias URL: .*' upload.log | cut -d' ' -f5)
+          URL=$(grep -o 'Version Preview Alias URL: .*' upload.log 2>/dev/null | cut -d' ' -f5 || true)
           if [ -z "$URL" ]; then
-            URL=$(grep -i -o 'https://[^ ]*workers\.dev' upload.log | head -n 1)
+            URL=$(grep -i -o 'https://[^ ]*workers\.dev' upload.log 2>/dev/null | head -n 1 || true)
           fi
           if [ -z "$URL" ]; then
             URL="https://${{ steps.alias.outputs.name }}-tdw-mp1.carlosteixeira05.workers.dev"
