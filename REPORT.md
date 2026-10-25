@@ -30,12 +30,31 @@ Para replicar a pipeline que criei inicialmente no GitHub Actions, escolhi o **G
 
 Em vez de correr todas as tarefas de forma sequencial (uma a seguir à outra), estruturei a pipeline para otimizar o tempo de execução e garantir que nenhum código com erros chega a produção.
 
-```
-       [lint] -------\
-      [format] --------> [build] ------> [deploy] (só na main)
-       [test] -------/      \
-                             \---------> [preview] ------> [lighthouse] (em PRs/MRs)
-   [ai-review] -----------------------/
+```mermaid
+flowchart LR
+    subgraph Validacao ["1. Validação (Paralelo)"]
+        lint["ESLint (lint)"]
+        format["Prettier (format)"]
+        test["Vitest (test)"]
+        ai["Gemini (ai-review)"]
+    end
+
+    subgraph Compilacao ["2. Compilação (Build Once)"]
+        build["Next.js Static Export (build)"]
+    end
+
+    subgraph Entrega ["3. Entrega & Deploy"]
+        deploy["Cloudflare Workers (deploy)<br/>(apenas na main)"]
+        preview["Cloudflare Preview (preview)<br/>(em PRs/MRs)"]
+        lh["Lighthouse CI (lighthouse)<br/>(auditoria)"]
+    end
+
+    lint --> build
+    format --> build
+    test --> build
+    build --> deploy
+    build --> preview
+    preview --> lh
 ```
 
 ### 3.1. Validações em Paralelo
