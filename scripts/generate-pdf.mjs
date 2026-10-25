@@ -26,9 +26,7 @@ function markdownToHtml(md) {
             `<pre class="mermaid">\n${codeBlockContent.join("\n")}\n</pre>`
           );
         } else {
-          output.push(
-            `<pre><code>${codeBlockContent.join("\n")}</code></pre>`
-          );
+          output.push(`<pre><code>${codeBlockContent.join("\n")}</code></pre>`);
         }
         inCodeBlock = false;
         codeBlockLang = "";
@@ -131,15 +129,15 @@ function renderTable(rows) {
       .filter(Boolean)
   );
 
-  let html = '<table>\n<thead>\n<tr>';
+  let html = "<table>\n<thead>\n<tr>";
   header.forEach((h) => (html += `<th>${h}</th>`));
-  html += '</tr>\n</thead>\n<tbody>\n';
+  html += "</tr>\n</thead>\n<tbody>\n";
   data.forEach((row) => {
-    html += '<tr>';
+    html += "<tr>";
     row.forEach((cell) => (html += `<td>${cell}</td>`));
-    html += '</tr>\n';
+    html += "</tr>\n";
   });
-  html += '</tbody>\n</table>';
+  html += "</tbody>\n</table>";
   return html;
 }
 
@@ -290,7 +288,8 @@ ${bodyHtml}
   fs.writeFileSync(tempHtmlPath, fullHtml, "utf8");
   console.log("HTML generated, invoking Edge for PDF printing...");
 
-  const edge = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
+  const edge =
+    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
 
   const p = spawn(edge, [
     "--headless=new",
