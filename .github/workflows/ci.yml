@@ -6,8 +6,9 @@ on:
   pull_request:
   repository_dispatch:
     types: [contentful-publish]
-  schedule:
-    - cron: "0 0 * * *"
+  # Schedule cron trigger disabled per assignment requirements after successful verification to save free minutes:
+  # schedule:
+  #   - cron: "0 0 * * *"
 
 jobs:
   lint:
