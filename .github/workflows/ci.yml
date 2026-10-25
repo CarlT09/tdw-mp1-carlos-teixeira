@@ -83,6 +83,8 @@ jobs:
     needs: [lint, format, test]
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.upload.outputs.url }}
     permissions:
       contents: read
       pull-requests: write
@@ -129,3 +131,29 @@ jobs:
               issue_number: context.issue.number,
               body: "Preview: ${{ steps.upload.outputs.url }}",
             });
+
+  lighthouse:
+    needs: preview
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for preview URL to be reachable
+        shell: bash
+        run: |
+          echo "Checking reachability of ${{ needs.preview.outputs.url }}..."
+          for i in {1..12}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ needs.preview.outputs.url }}" || true)
+            if [ "$STATUS" = "200" ]; then
+              echo "Preview URL returned HTTP 200!"
+              break
+            fi
+            echo "Attempt $i: status $STATUS, waiting 5 seconds..."
+            sleep 5
+          done
+      - name: Audit Preview with Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          urls: ${{ needs.preview.outputs.url }}
+          uploadArtifacts: true
+          temporaryPublicStorage: true
