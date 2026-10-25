@@ -1,7 +1,7 @@
 import fs from "node:fs";
 
 async function runReview() {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = (process.env.GEMINI_API_KEY || "").trim();
   if (!apiKey) {
     console.warn("GEMINI_API_KEY not found in environment.");
     return;
@@ -40,18 +40,57 @@ Estrutura o teu parecer com:
 - **⚡ Qualidade & Boas Práticas:** Avalia estilo, padrões TypeScript e boas práticas de Next.js.
 - **✅ Parecer Final:** Veredito e recomendações pontuais.`;
 
-  const models = ["gemini-2.0-flash", "gemini-1.5-flash"];
+  // Discover available models dynamically from the user's API key
+  let candidateModels = [
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-latest",
+  ];
+
+  try {
+    console.log("Querying available Gemini models for this API key...");
+    const listRes = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models",
+      {
+        headers: { "x-goog-api-key": apiKey },
+      }
+    );
+
+    if (listRes.ok) {
+      const listData = await listRes.json();
+      const valid = (listData.models || [])
+        .filter((m) =>
+          m.supportedGenerationMethods?.includes("generateContent")
+        )
+        .map((m) => m.name.replace(/^models\//, ""));
+
+      if (valid.length > 0) {
+        console.log("Discovered models from Google API:", valid);
+        const flash = valid.filter((m) => m.includes("flash"));
+        candidateModels = flash.length > 0 ? flash : valid;
+      }
+    } else {
+      console.warn(
+        `Models list endpoint returned ${listRes.status}: ${await listRes.text()}`
+      );
+    }
+  } catch (e) {
+    console.warn("Could not list models dynamically:", e.message);
+  }
+
   let reviewText = "";
 
-  for (const model of models) {
+  for (const model of candidateModels) {
     try {
-      console.log(`Calling Gemini API with model ${model}...`);
+      console.log(`Calling generateContent on model: ${model}...`);
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "x-goog-api-key": apiKey,
           },
           body: JSON.stringify({
             contents: [
@@ -79,11 +118,11 @@ Estrutura o teu parecer com:
       const data = await response.json();
       reviewText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (reviewText) {
-        console.log(`Success with model ${model}!`);
+        console.log(`Success! Generated review using ${model}!`);
         break;
       }
     } catch (err) {
-      console.warn(`Error connecting with model ${model}:`, err);
+      console.warn(`Error connecting with model ${model}:`, err.message);
     }
   }
 
