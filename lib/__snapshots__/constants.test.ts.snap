@@ -1,0 +1,9 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`CMS constants match snapshot 1`] = `
+{
+  "CMS_NAME": "Contentful",
+  "CMS_URL": "https://www.contentful.com",
+  "EXAMPLE_PATH": "cms-contentful",
+}
+`;
