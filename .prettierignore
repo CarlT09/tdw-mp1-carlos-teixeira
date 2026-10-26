@@ -2,3 +2,12 @@ node_modules
 .next
 out
 .env*.local
+*.pdf
+*.docx
+*.png
+*.jpg
+*.jpeg
+*.svg
+scripts/generate-docs.mjs
+scripts/generate-pdf.mjs
+scripts/save-diagram-png.mjs
