@@ -10,32 +10,56 @@
 
 ## 1. O Desafio e o Objetivo do Trabalho
 
-Neste trabalho, o objetivo principal não foi desenvolver código aplicacional de raiz, mas sim construir toda a infraestrutura de automação (CI/CD) para levar uma aplicação Next.js (TypeScript) integrada com o Contentful Headless CMS até à produção no Cloudflare Workers.
+Neste trabalho, o objetivo foi construir a infraestrutura de automação (CI/CD) para levar uma aplicação Next.js (TypeScript) integrada com o Contentful Headless CMS até à produção no Cloudflare Workers.
 
-O foco esteve em aplicar boas práticas de desenvolvimento: usar branches para cada funcionalidade (_feature branches_), proteger a branch principal (`main`) para que nada entre sem passar por Pull Request, garantir que o código tem qualidade antes de ser compilado e replicar toda esta lógica numa segunda plataforma (o GitLab CI/CD), percebendo as diferenças reais entre ferramentas.
+O foco esteve em aplicar boas práticas: usar branches de funcionalidade (_feature branches_), proteger a branch `main` com Pull Requests obrigatórios, validar a qualidade antes da compilação e replicar toda a lógica no GitLab CI/CD, comparando as duas plataformas.
 
 ---
 
 ## 2. Escolha da 2ª Plataforma: GitLab CI/CD
 
-Para replicar a pipeline que criei inicialmente no GitHub Actions, escolhi o **GitLab CI/CD** pelas seguintes razões:
+Para replicar a pipeline do GitHub Actions, escolhi o **GitLab CI/CD** por três razões:
 
-- É uma das ferramentas mais usadas na indústria e no mercado de trabalho a nível de DevOps.
-- Tem uma abordagem diferente do GitHub: enquanto o GitHub corre em máquinas virtuais completas recorrendo a ações prontas da comunidade, o GitLab organiza-se por estágios (_stages_) e corre diretamente em contentores Docker (`node:22`).
-- Tem funcionalidades nativas muito interessantes, como os _Review Apps_ (ambientes dinâmicos), o que permitiu comparar como as duas plataformas lidam com links de teste em Pull Requests / Merge Requests.
+- É uma referência na indústria e no mercado de trabalho em DevOps.
+- Tem uma abordagem distinta do GitHub: corre diretamente em contentores Docker (`node:22`) organizados por estágios (_stages_).
+- Possui suporte nativo a _Review Apps_ (ambientes dinâmicos), permitindo comparar a gestão de pré-visualizações entre ecossistemas.
 
 ---
 
 ## 3. Como Estruturei a Pipeline de CI/CD
 
-Em vez de correr todas as tarefas de forma sequencial (uma a seguir à outra), estruturei a pipeline para otimizar o tempo de execução e garantir que nenhum código com erros chega a produção.
+Em vez de correr todas as tarefas em fila indiana, estruturei a pipeline para otimizar o tempo de execução e garantir que nenhum código com erros chega a produção.
 
-```
-       [lint] -------\
-      [format] --------> [build] ------> [deploy] (só na main)
-       [test] -------/      \
-                             \---------> [preview] ------> [lighthouse] (em PRs/MRs)
-   [ai-review] -----------------------/
+```mermaid
+flowchart TD
+    subgraph S1 ["1. Validação em Paralelo (Todos os eventos)"]
+        lint["ESLint (lint)"]
+        format["Prettier (format)"]
+        test["Vitest (test)"]
+    end
+
+    subgraph S2 ["2. Compilação (Build Once)"]
+        build["Next.js Static Export (build)<br/><i>Gera pasta ./out como artefacto</i>"]
+    end
+
+    subgraph S3_Main ["3A. Produção (Apenas branch main)"]
+        deploy["Cloudflare Workers (deploy)<br/><b>Deploy Oficial em Produção</b>"]
+    end
+
+    subgraph S3_PR ["3B. Pré-visualização (Apenas em PRs / MRs)"]
+        ai["Gemini (ai-review)<br/><i>(Revisão do diff em PR/MR)</i>"]
+        preview["Cloudflare Preview (preview)<br/><i>GitHub: bot comenta link no PR<br/>GitLab: botão nativo 'View app'</i>"]
+        lh["Lighthouse CI (lighthouse)<br/><i>(Audita a Preview após HTTP 200)</i>"]
+    end
+
+    lint --> build
+    format --> build
+    test --> build
+
+    build -->|Se for na branch main| deploy
+    build -->|Se for em Pull Request / Merge Request| preview
+    preview -->|Após link de preview ativo| lh
+    ai -.->|Análise paralela no PR/MR| preview
 ```
 
 ### 3.1. Validações em Paralelo
@@ -54,22 +78,24 @@ Uma preocupação importante foi não perder tempo a compilar a aplicação vár
 
 Depois, os jobs que precisam desses ficheiros (tanto o `deploy` de produção como o `preview` de teste) limitam-se a descarregar essa mesma pasta e a enviá-la para a Cloudflare através da ferramenta `wrangler`. Isto garante que aquilo que foi testado é exatamente aquilo que vai para a nuvem.
 
-### 3.3. Gestão de Segredos e Credenciais
+### 3.3. Comportamento: Branch `main` vs. Branches de Teste (PR / MR)
+
+A pipeline distingue de forma clara o destino das alterações para proteger a versão de produção:
+
+- **Se o código for para a branch `main`:** A pipeline avança do `build` diretamente para o job de **`deploy`**, atualizando o site oficial na Cloudflare Workers (`https://tdw-mp1.carlosteixeira05.workers.dev`). Os jobs de pré-visualização e auditoria são ignorados, pois a `main` é a versão estável final.
+- **Se estivermos numa branch que não a `main` (em Pull Request ou Merge Request):** O deploy de produção é bloqueado. Em vez disso, a pipeline gera um ambiente de pré-visualização (**`preview`**) com um URL temporário na Cloudflare:
+  - **No GitHub Actions:** O bot automatizado (`github-actions[bot]`) publica um comentário diretamente na discussão do Pull Request com o link de teste.
+  - **No GitLab CI/CD:** O GitLab ativa o seu mecanismo nativo de **Review Apps**, colocando logo no topo do Merge Request um botão interativo **"View app"** para abrir o site de teste sem encher o histórico de comentários.
+  - **Auditoria com Lighthouse CI:** Apenas nos PRs/MRs (e após o link de preview responder `HTTP 200`), o job **`lighthouse`** executa a auditoria de Performance, Acessibilidade e SEO sobre a URL de preview.
+  - **Revisão IA:** O job **`ai-review`** analisa o diff do código com o Gemini exclusivamente durante o PR/MR.
+
+### 3.4. Gestão de Segredos e Gatilhos
 
 Nenhum token ou chave secreta foi colocado no código:
 
-- **Segredos:** Chaves de API (`CLOUDFLARE_API_TOKEN`, `CONTENTFUL_ACCESS_TOKEN`, `GEMINI_API_KEY`) foram configuradas em _Secrets_ no GitHub e em variáveis mascaradas (_Masked_) no GitLab.
-- **Identificadores normais:** Valores não secretos (`CLOUDFLARE_ACCOUNT_ID`, `CONTENTFUL_SPACE_ID`) ficaram como variáveis normais de repositório.
-- No GitHub Actions, usei a sintaxe `${{ vars.VAR || secrets.VAR }}` para que a pipeline funcione quer o valor esteja guardado em variáveis ou em segredos.
-
-### 3.4. Gatilhos da Automação
-
-A pipeline reage a quatro situações:
-
-- **Push na `main`:** Faz as validações, gera o build e coloca a nova versão em produção na Cloudflare.
-- **Pull Request / Merge Request:** Cria uma versão de pré-visualização na Cloudflare com um URL único para podermos ver as alterações antes de fazer merge, corre o Lighthouse e chama o revisor de código IA.
-- **Webhook do Contentful:** Quando crio ou edito um artigo no Contentful, o CMS dispara um webhook (`repository_dispatch`) para o GitHub, fazendo com que o site seja atualizado sem precisar de mexer no Git.
-- **Agendamento diário (`schedule`):** Configurei um gatilho cron para correr à meia-noite (`0 0 * * *`). Depois de confirmar que funcionava, comentei esse gatilho no ficheiro YAML (com nota explicativa), tal como pedido no enunciado, para não gastar os minutos gratuitos da conta.
+- **Segredos:** Chaves de API (`CLOUDFLARE_API_TOKEN`, `CONTENTFUL_ACCESS_TOKEN`, `GEMINI_API_KEY`) foram configuradas em _Secrets_ no GitHub e em variáveis mascaradas (_Masked_) no GitLab. Identificadores normais (`CLOUDFLARE_ACCOUNT_ID`, `CONTENTFUL_SPACE_ID`) ficaram como variáveis comuns.
+- **Gatilho Contentful:** Quando crio ou edito um artigo no CMS, o Contentful dispara um webhook (`repository_dispatch`) que manda a pipeline reconstruir o site automaticamente.
+- **Agendamento diário (`schedule`):** Configurei o cron para correr à meia-noite (`0 0 * * *`). Após confirmar que funcionava, comentei-o no YAML (com nota explicativa), cumprindo o pedido do enunciado para poupar minutos de CI/CD.
 
 ---
 
@@ -77,10 +103,10 @@ A pipeline reage a quatro situações:
 
 Para além dos requisitos base, implementei várias melhorias práticas:
 
-1. **100% de Cobertura de Testes (Vitest):** Configurei a medição de cobertura com o `@vitest/coverage-v8`. Os testes cobrem 100% das linhas, funções e ramificações. Adicionei os badges no `README.md` do GitHub e configurei uma expressão regular no GitLab para mostrar a percentagem de 100% automaticamente na interface do Merge Request.
+1. **100% de Cobertura de Testes (Vitest):** Configurei a medição de cobertura com o `@vitest/coverage-v8` cobrindo 100% das linhas, funções e ramificações. Adicionei os badges no `README.md` do GitHub e configurei uma expressão regular no GitLab para mostrar os 100% no Merge Request.
 2. **Testes de Snapshot:** Adicionei testes de snapshot com Vitest no ficheiro `constants.test.ts` para garantir que configurações fixas não mudam por acidente.
 3. **Auditoria com Lighthouse CI:** Tanto no GitHub como no GitLab, adicionei um job que audita o link de preview na Cloudflare, avaliando Performance, Acessibilidade e SEO antes do merge.
-4. **Revisor de Código com Inteligência Artificial (Google Gemini):** Criei um script próprio em Node.js (`scripts/ai-review.mjs`) que lê o _diff_ do Pull Request/Merge Request e pede uma revisão técnica ao modelo `gemini-2.0-flash`. O script é independente de plataforma e corre da mesma forma no GitHub e no GitLab.
+4. **Revisor de Código com Inteligência Artificial (Google Gemini):** Criei um script em Node.js (`scripts/ai-review.mjs`) que lê o _diff_ do PR/MR e pede uma revisão técnica ao modelo `gemini-2.0-flash`. O script é independente de plataforma e corre da mesma forma no GitHub e no GitLab.
 
 ---
 
@@ -88,14 +114,14 @@ Para além dos requisitos base, implementei várias melhorias práticas:
 
 Ao replicar a pipeline no GitLab, notei diferenças evidentes no funcionamento de cada plataforma:
 
-| Aspeto                       | GitHub Actions                                                          | GitLab CI/CD                                                                                                                                         |
-| :--------------------------- | :---------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Estrutura**                | Ficheiro baseado em eventos (`on: push, pull_request`).                 | Ficheiro baseado em estágios (`stages: validate, build, deploy`).                                                                                    |
-| **Ambiente**                 | Corre em máquinas virtuais Ubuntu completas (`runs-on: ubuntu-latest`). | Corre em contentores Docker limpos (`image: node:22`).                                                                                               |
-| **Cache de dependências**    | Fácil de ativar através do `cache: npm` no `setup-node`.                | Definido manualmente indicando a pasta `.npm/` e a chave baseada no `package-lock.json`.                                                             |
-| **Links de Teste (Preview)** | Tive de usar uma ação para comentar o link no PR.                       | O GitLab tem suporte nativo para **Review Apps**, colocando logo um botão "View app" no Merge Request.                                               |
-| **Controlo de Pipelines**    | Cada job avalia os seus `if:` de forma independente.                    | Foi necessário usar `workflow: rules:` no topo para evitar que o GitLab criasse duas pipelines ao mesmo tempo (uma para a branch e outra para o MR). |
-| **Variáveis Protegidas**     | Os segredos ficam disponíveis em todas as branches por defeito.         | No GitLab há o visto "Protect variable"; se ficar ativo, as variáveis só vão para a `main`, falhando nas branches de teste.                          |
+| Aspeto                       | GitHub Actions                                                          | GitLab CI/CD                                                                                                 |
+| :--------------------------- | :---------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------- |
+| **Estrutura**                | Ficheiro baseado em eventos (`on: push, pull_request`).                 | Ficheiro baseado em estágios (`stages: validate, build, deploy`).                                            |
+| **Ambiente**                 | Corre em máquinas virtuais Ubuntu completas (`runs-on: ubuntu-latest`). | Corre em contentores Docker limpos (`image: node:22`).                                                       |
+| **Cache de dependências**    | Fácil de ativar através do `cache: npm` no `setup-node`.                | Definido manualmente indicando a pasta `.npm/` e a chave baseada no `package-lock.json`.                     |
+| **Links de Teste (Preview)** | O bot comenta o link do preview na discussão do PR.                     | O GitLab tem suporte nativo para **Review Apps**, colocando logo um botão "View app" no Merge Request.       |
+| **Controlo de Pipelines**    | Cada job avalia os seus `if:` de forma independente.                    | Foi necessário usar `workflow: rules:` no topo para evitar que o GitLab criasse duas pipelines concorrentes. |
+| **Variáveis Protegidas**     | Os segredos ficam disponíveis em todas as branches por defeito.         | No GitLab há o visto "Protect variable"; se ativo, as variáveis só vão para a `main`, falhando em branches.  |
 
 ---
 
@@ -103,16 +129,16 @@ Ao replicar a pipeline no GitLab, notei diferenças evidentes no funcionamento d
 
 Durante o desenvolvimento deparei-me com alguns obstáculos práticos:
 
-- **Conflito de dependências no Node 22 com o Vitest:** Ao correr `npm ci` dava erro de resolução de pacotes. Resolvi criando um ficheiro `.npmrc` com a opção `legacy-peer-deps=true` e regerei o `package-lock.json`, garantindo que o comando funciona sem falhas quer localmente quer na nuvem.
-- **Configuração da proteção de branch no GitHub:** No início o merge ficava bloqueado porque tinha selecionado verificações com nomes manuais. Foi preciso alinhar as regras exatamente com os nomes dos jobs do GitHub Actions (`lint`, `format`, `test`).
+- **Conflito de dependências no Node 22 com o Vitest:** Ao correr `npm ci` dava erro de pacotes. Resolvi criando um ficheiro `.npmrc` com `legacy-peer-deps=true` e regerei o `package-lock.json`.
+- **Configuração da proteção de branch no GitHub:** No início o merge ficava bloqueado porque tinha selecionado verificações manuais. Alinhei as regras com os nomes dos jobs (`lint`, `format`, `test`).
 - **Tempo de espera do link de preview na Cloudflare:** Quando o comando do Wrangler terminava, o URL às vezes demorava alguns segundos a responder na internet. Criei um ciclo de espera simples que faz pedidos até o site responder `HTTP 200` antes de arrancar com o Lighthouse.
-- **Pipelines duplicadas no GitLab:** Quando abri o Merge Request no GitLab, a pipeline falhava a dizer que o job `preview` não encontrava o `build`. Isto acontecia porque o GitLab estava a gerar uma pipeline para a branch e outra para o MR ao mesmo tempo. Resolvi adicionando o bloco `workflow: rules:` que unificou o comportamento.
-- **Ajuste na API do Gemini:** Inicialmente tive erros 404 porque o nome do modelo variava na Google AI Studio. Atualizei o script para interrogar a API sobre os modelos disponíveis na chave e aumentei o limite de tokens (`maxOutputTokens: 2500`) para a análise não ficar cortada a meio da frase.
+- **Pipelines duplicadas no GitLab:** Quando abri o Merge Request no GitLab, o `preview` não encontrava o `build` porque o GitLab estava a gerar duas pipelines ao mesmo tempo. Resolvi adicionando a diretiva `workflow: rules:` que unificou o fluxo.
+- **Ajuste na API do Gemini:** Inicialmente tive erros 404 porque o nome do modelo variava. Atualizei o script para interrogar a API sobre os modelos disponíveis na chave e aumentei o limite de tokens (`maxOutputTokens: 2500`) para a análise não ficar cortada.
 
 ---
 
 ## 7. O que Aprendi e Conclusão
 
-Este trabalho permitiu-me perceber na prática como funciona uma pipeline profissional de CI/CD e porque é que estas ferramentas são tão importantes no dia a dia. Antes deste projeto, a ideia de automatizar testes, compilação e deploy parecia algo abstrato; ao implementar passo a passo, percebi o valor de ter a certeza de que nenhum código estragado vai para produção.
+Este trabalho permitiu-me perceber na prática como funciona uma pipeline profissional de CI/CD e porque é que estas ferramentas são fundamentais no dia a dia. Ao implementar tudo passo a passo, compreendi o valor de ter a certeza de que nenhum código com falhas chega a produção.
 
-A experiência de replicar tudo no GitLab foi especialmente útil, porque mostrou que o importante não é decorar a sintaxe de uma ferramenta específica, mas sim entender os conceitos fundamentais: isolar tarefas, reutilizar artefactos, proteger credenciais e garantir que o processo é fiável e repetível em qualquer plataforma. Ambas as pipelines ficaram totalmente funcionais, verdes e com paridade completa.
+A experiência de replicar tudo no GitLab foi especialmente enriquecedora, provando que o essencial são os conceitos base: isolar tarefas, reutilizar artefactos, proteger credenciais e garantir processos repetíveis. Ambas as pipelines ficaram totalmente funcionais, verdes e com paridade completa.
